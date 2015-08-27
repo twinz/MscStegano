@@ -6,39 +6,6 @@ import math
 import os
 from collections import defaultdict
 
-std_quant_tbl = [
-  [
-  [16,  11,  10,  16,  24,  40,  51,  61],
-  [12,  12,  14,  19,  26,  58,  60,  55],
-  [14,  13,  16,  24,  40,  57,  69,  56],
-  [14,  17,  22,  29,  51,  87,  80,  62],
-  [18,  22,  37,  56,  68, 109, 103,  77],
-  [24,  35,  55,  64,  81, 104, 113,  92],
-  [49,  64,  78,  87, 103, 121, 120, 101],
-  [72,  92,  95,  98, 112, 100, 103,  99]
-  ],
-  [
-  [17,  18,  24,  47,  99,  99,  99,  99],
-  [18,  21,  26,  66,  99,  99,  99,  99],
-  [24,  26,  56,  99,  99,  99,  99,  99],
-  [47,  66,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99]
-  ],
-  [
-  [17,  18,  24,  47,  99,  99,  99,  99],
-  [18,  21,  26,  66,  99,  99,  99,  99],
-  [24,  26,  56,  99,  99,  99,  99,  99],
-  [47,  66,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99],
-  [99,  99,  99,  99,  99,  99,  99,  99]
-  ]
-]
-
 def loadImg(imgfile):
     global iHeight
     global iWidth
@@ -49,14 +16,14 @@ def loadImg(imgfile):
     img = cv2.imread(imgfile, cv2.CV_LOAD_IMAGE_COLOR)
     quantization =  Image.open(imgfile).quantization
     quantization[2] = quantization[1]
-    #print quantization
     quantizationTable = []
     quantizationTable.append([])
     quantizationTable.append([])
     quantizationTable.append([])
     l = 0
 
-    for i in range(len(quantization)):#quantization.values():
+    # Quantization table
+    for i in range(len(quantization)):
         quantizationTable[i].append([])
         k = 0
         for j in range(len(quantization[i])):
@@ -69,10 +36,6 @@ def loadImg(imgfile):
                     quantizationTable[i].append([])
 
 
-
-    # wndLoad = "pixeknot-lenna stego-image"
-    # cv2.namedWindow(wndLoad, cv2.WINDOW_AUTOSIZE)
-    # cv2.imshow(wndLoad, img)
 
     iHeight, iWidth = img.shape[:2]
 
@@ -97,7 +60,8 @@ def dct(coverImage):
     dctDict = {}
     d3_dict = defaultdict(lambda: defaultdict(dict))
     # ETAPE 1: COLOR PROCESSING
-    coverImage = cv2.cvtColor(coverImage, cv2.COLOR_BGR2YCR_CB)
+    #coverImage = cv2.cvtColor(coverImage, cv2.COLOR_BGR2YCR_CB)"""""""""""""""""""""""""""
+
     # ETAPE 2: SUB-SAMPLING
     for startY in range(0, iHeight, 8):
         for startX in range(0, iWidth, 8):
@@ -108,14 +72,12 @@ def dct(coverImage):
                 # ETAPE 4: DCT FOR EACH BLOCS
                 blockf = np.float32(block)     # float conversion
                 dst = cv2.dct(blockf)          # dct
-                #dst2 = np.around(dst)           # !!!!!!!!!!!!!!!!! NE MULTIPLIE PAS AVEC LA QUANTIZATION TABLE
-                                                # regarder si pour benford + fiddish il faut que le coef soit quantizer
+                dst2 = np.around(dst)
+
                 #quantization
-                print np.around(dst)
-                blockq = np.around(np.divide(dst, quantizationTable[c]))
-                blockq = np.multiply(blockq, quantizationTable[c])
-                print blockq
-                exit()
+                blockq = np.around(np.divide(dst, quantizationTable[c])) # ne pas recompresser pour friddish
+                # blockq = np.multiply(blockq, quantizationTable[c])
+
                  # store the result
 
     #             for y in range(8):
@@ -130,7 +92,8 @@ def dct(coverImage):
                 for y in range(8):
                     for x in range(8):
                         #dctDict[startY+y, startX+x] = dst2[y, x]
-                        dctList.append(dst2[y, x])
+                        #dctList.append(dst2[y, x])
+                        dctList.append(blockq[y,x])
 
     return dctList
 
@@ -152,32 +115,7 @@ def dct(coverImage):
 #
 #     return mapDct
 
-def printImg(mapDct, mapDct2):
-    X = []
-    Y = []
 
-    X2 = []
-    Y2 = []
-
-    for key in mapDct:
-        if (key >= -8 and key <= 8):
-            X.append(key)
-            Y.append(mapDct[key])
-
-    for key in mapDct2:
-        if (key >= -8 and key <= 8):
-            X2.append(key)
-            Y2.append(mapDct2[key])
-
-    plt.title("DCT histogram")
-    plt.hist(X, 15, weights=Y, color='b', label='stego-image', alpha=0.5)
-    plt.hist(X2, 15, weights=Y2, color='r', label='cover-image', alpha=0.5)
-    plt.xlabel('DCT')
-    plt.ylabel('Number')
-    plt.legend(loc='upper right')
-
-    plt.grid(True)
-    plt.show()
 
 def modifImage(path, name, type):
     jpeg = Image.open(path + name + type)
@@ -189,25 +127,10 @@ def modifImage(path, name, type):
     jpeg_modif.save(path + name + "_modif.jpg", "JPEG", qtables=quantization)
 
 
-
-# def Hkl(d, mapDct):
-#     P = mapDct[1] + mapDct[2] + mapDct[3] + mapDct[4] + mapDct[5] + mapDct[6] + mapDct[7] + mapDct[8]
-#     n = 20 #must be calculate
-#     if (d == 0):
-#         H = mapDct[0] + ( (n/P) * mapDct[1] )
-#     else:
-#         H = ((1 - (n/P)) * mapDct[d]) + ( (n/P) * mapDct[d + 1] )
-#     return H
-
-# def Beta(mapDct, mapDctModif):
-#     a = ( mapDctModif[1] * (Hkl(0, mapDct) - mapDctModif[0]) ) +  ( (Hkl(1, mapDct) - mapDctModif[1]) * (mapDctModif[2] - mapDctModif[1]) )
-#     if ((mapDctModif[2] - mapDctModif[1]) > 0):
-#         b = (mapDctModif[1] ** .5) + ( (mapDctModif[2] - mapDctModif[1]) ** .5 )
-#     else:
-#         b = (mapDctModif[1] ** .5)
-#     res = a/b
-#     return res
-
+########################################################################
+#                   BREAKING THE F5 ALGORITHM                          #
+#                       Fridrich Attack                                #
+########################################################################
 
 def Beta(mapDct, mapDctModif):
     beta = np.empty((8,8))
@@ -254,29 +177,10 @@ def MsgLength(beta, mapDctModif):
     return length
 
 
+########################################################################
+#                            BENFORD                                   #
+########################################################################
 
-# def Benford(n):
-#     N = 1.344
-#     S = -0.376
-#     q = 1.685
-#
-#     p = N * math.log10(1 + (1 / ( S + math.pow(n, q))))
-#     return p
-#
-# def calculate_benfords_percentages():
-#     """
-#    Takes in no arguments
-#    returns list of calculated values of Benford's law
-#    """
-#     numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-#     actualValues = []
-#     for i in numbers:
-#         value = math.log10(1 + float(1) / i)
-#         actualValues.append(round(value, 3))
-#     return actualValues
-#
-# actualValues = calculate_benfords_percentages()
-#
 def find_leading_number(line):
     """
    Takes in a string
@@ -290,116 +194,6 @@ def find_leading_number(line):
         if line[i] in numbers:
             return int(line[i])
     return 0
-#
-#
-# def read_numbers(dataFile):
-#     """
-#    Takes in a text file of a data set
-#    Returns a list of the number of times each number occurred a leading digit
-#    The list corresponds to the number of occcurrances such that list[0] is for number one
-#    index 1 is for number two:
-#    [1, 2, 3, 4, 5, 6, 7, 8, 9]
-#    """
-#     listOfoccurances = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-#     #for lines in dataFile:
-#     lead = find_leading_number(dataFile)
-#     if lead != 0:
-#         listOfoccurances[lead - 1] += 1
-#     return listOfoccurances
-#
-#
-# def find_probabilities(listOfoccurrances):
-#     """
-#    Takes in a list of numbers corresponding to the number of occurrances
-#    Returns the probability of each occurring
-#    """
-#     total = 0
-#     probabilities = []
-#     for number in listOfoccurrances:
-#         total += number
-#     if (total == 0):
-#         total = 1
-#     for number in listOfoccurrances:
-#         value = float(number) / total #a checkaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-#         probabilities.append(round(value, 3))
-#     print probabilities
-#     exit()
-#     return probabilities
-#
-#
-# def average_probabilities(fileList):
-#     """
-#    Takes no arguments.
-#    Calls read_numbers on each of the text files, and then averages the results
-#    Returns list of average percentage values
-#    """
-#     #fileList = ["500","1","15","21","32","45","56","67","78","85","96"]
-#     totalOccurances = []
-#     numbers = []
-#     for files in fileList:
-#         numbers.append(read_numbers(files))
-#     for index in range(0, len(numbers)):
-#         numbers[index] = find_probabilities(numbers[index])
-#     averageProbabilities = []
-#     for probabilities in range(0, 9):
-#         total = 0
-#         for numList in range(0, len(numbers)):
-#             total += numbers[numList][probabilities]
-#         average = float(total) / len(numbers) #a checkaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-#         averageProbabilities.append(round(average, 3))
-#     return averageProbabilities
-#
-#
-# def total_occurrances(fileList):
-#     """
-#    Takes no arguments
-#    Calls read numbers on each text file, and add the lists together
-#    Returns one total list
-#    """
-#     #fileList = ["500","1","15","21","32","45","56","67","78","85","96"]
-#     totalOccurrances = []
-#     numbers = []
-#     for files in fileList:
-#         numbers.append(read_numbers(files))
-#     for numbahs in range(0, 9):
-#         total = 0
-#         for numList in range(0, len(numbers)):
-#             total += numbers[numList][numbahs]
-#         totalOccurrances.append(total)
-#     return totalOccurrances
-#
-#
-# def plot_occurrance_data(fileList):
-#     """
-#    Takes in a list of numbers corresponding to the number of occurrances
-#    Returns a graph of the number of occurrances
-#    """
-#     yValues = total_occurrances(fileList)
-#     xValues = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-#     plt.xlabel("Leading Digit")
-#     plt.ylabel("Times Occurred")
-#     plt.title("Leading digit (1-9) vs. Number of times as leading digit")
-#     plt.bar(xValues, yValues, align = "center")
-#     plt.show()
-#
-#
-# def plot_probability_data(fileList):
-#     """
-#    Takes in no arguments
-#    Returns a graph of the average percentages for the data files used above
-#    """
-#     yValues = average_probabilities(fileList)
-#     yExpected = actualValues
-#     xOne = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-#     xTwo = [.75, 1.75, 2.75, 3.75, 4.75, 5.75, 6.75, 7.75, 8.75]
-#     plt.xlabel("Leading Digit")
-#     plt.ylabel("Average Probability")
-#     plt.title("Leading digit (1-9) vs. Average Probabilty")
-#     plt.bar(xTwo, yValues, width = 0.5, align = "center", color = "blue", label = "Observed")
-#     plt.bar(xOne, yExpected, width = 0.45, color = "red", label = "Expected")
-#     plt.xticks(range(1, 10), ('1', '2', '3', '4', '5', '6', '7', '8', '9'))
-#     plt.legend()
-#     plt.show()
 
 def pearson(x,y):
    nx = len(x)
@@ -427,6 +221,12 @@ def calc_firstdigit(dataset):
    distr = [fdigit.count(str(i))/float(len(dataset))*100 for i in xrange(1, 10)]
    return distr
 
+
+########################################################################
+#                             PLOT                                     #
+########################################################################
+
+# FOR BENBORD
 def plot_comparative(aset, bset, dataset_label):
    plt.plot(aset, linewidth=1.0)
    plt.plot(bset, linewidth=1.0)
@@ -437,6 +237,33 @@ def plot_comparative(aset, bset, dataset_label):
    plt.grid(True)
    return plt.show()
 
+# FOR BREAKING THE F5 ALGORITHM
+def printImg(mapDct, mapDct2):
+    X = []
+    Y = []
+
+    X2 = []
+    Y2 = []
+
+    for key in mapDct:
+        if (key >= -8 and key <= 8):
+            X.append(key)
+            Y.append(mapDct[key])
+
+    for key in mapDct2:
+        if (key >= -8 and key <= 8):
+            X2.append(key)
+            Y2.append(mapDct2[key])
+
+    plt.title("DCT histogram")
+    plt.hist(X, 15, weights=Y, color='b', label='stego-image', alpha=0.5)
+    plt.hist(X2, 15, weights=Y2, color='r', label='cover-image', alpha=0.5)
+    plt.xlabel('DCT')
+    plt.ylabel('Number')
+    plt.legend(loc='upper right')
+
+    plt.grid(True)
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -445,44 +272,48 @@ if __name__ == "__main__":
 #                       POUR TESTER UN BENFORD                         #
 ########################################################################
 
+### Aff graph
     path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\stego\\"
-    picture = "pixelknot-hearth.jpg"
-    name = "pixelknot-hearth"
+    name = "pixelknot-cave"
 
-    imgLoaded = loadImg(path + picture)
+    imgLoaded = loadImg(path + name + ".jpg")
     dctArray = dct(imgLoaded)
 
-    #plot_occurrance_data(dctArray)
-    #plot_occurrance_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
-    # plot_probability_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
-
-    # bendordLaw = benford_law()
-    # me = calc_firstdigit(dctArray)
-    # print me
-    # plot_comparative(me, benford_law(), name)
-
-    file = open("result.txt", "w")
-    pathPure = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\pure\\"
-    pathStego = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\stego\\"
     bendordLaw = benford_law()
+    me = calc_firstdigit(dctArray)
+    print me
+    plot_comparative(me, benford_law(), name + "-JPEGCoeff")
 
-    for picture in os.listdir(pathPure):
-        print picture
-        file.write("Processing " + picture + "\n")
-        imgLoaded = loadImg(pathPure + picture)
-        dctArray = dct(imgLoaded)
-        bendord = calc_firstdigit(dctArray)
-        file.write(str(bendord) + "\n")
-
-        print pathStego + "pixelknot-" + picture
-        file.write("Processing " + "pixelknot-" + picture + "\n")
-        imgLoaded = loadImg(pathStego + "pixelknot-" + picture)
-        dctArray = dct(imgLoaded)
-        bendord = calc_firstdigit(dctArray)
-        file.write(str(bendord) + "\n")
+    ## plot_occurrance_data(dctArray)
+    ## plot_occurrance_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
+    ## plot_probability_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
 
 
-    file.close()
+
+
+### Print value on file
+    # file = open("result.txt", "w")
+    # pathPure = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\pure\\"
+    # pathStego = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\stego\\"
+    # bendordLaw = benford_law()
+    #
+    # for picture in os.listdir(pathPure):
+    #     print picture
+    #     file.write("Processing " + picture + "\n")
+    #     imgLoaded = loadImg(pathPure + picture)
+    #     dctArray = dct(imgLoaded)
+    #     bendord = calc_firstdigit(dctArray)
+    #     file.write(str(bendord) + "\n")
+    #
+    #     print pathStego + "pixelknot-" + picture
+    #     file.write("Processing " + "pixelknot-" + picture + "\n")
+    #     imgLoaded = loadImg(pathStego + "pixelknot-" + picture)
+    #     dctArray = dct(imgLoaded)
+    #     bendord = calc_firstdigit(dctArray)
+    #     file.write(str(bendord) + "\n")
+    #
+    #
+    # file.close()
 
 
 
