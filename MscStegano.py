@@ -1,10 +1,19 @@
+########################################################################
+#                       ALEXANDRE MARTENS                              #
+#         MSc Project. Breaking PixelKnot (Breaking F5 Algo)           #
+#         Implementation of Fridrich Attack and Benford Attack         #
+########################################################################
+
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import math
-import os
-from collections import defaultdict
+
+########################################################################
+#                   BREAKING THE F5 ALGORITHM                          #
+#                       Fridrich Attack                                #
+########################################################################
 
 def loadImg(imgfile):
     global iHeight
@@ -35,8 +44,6 @@ def loadImg(imgfile):
                 if (k != 8):
                     quantizationTable[i].append([])
 
-
-
     iHeight, iWidth = img.shape[:2]
 
     # set size to multiply of 8
@@ -53,70 +60,6 @@ def loadImg(imgfile):
     iHeight, iWidth = img.shape[:2]
     return img
 
-def dct(coverImage):
-    dctList = np.empty(shape=(iHeight, iWidth))
-    #dctList = np.empty((iHeight, iWidth, 1000))
-    dctList = []
-    dctDict = {}
-    d3_dict = defaultdict(lambda: defaultdict(dict))
-    # ETAPE 1: COLOR PROCESSING
-    #coverImage = cv2.cvtColor(coverImage, cv2.COLOR_BGR2YCR_CB)"""""""""""""""""""""""""""
-
-    # ETAPE 2: SUB-SAMPLING
-    for startY in range(0, iHeight, 8):
-        for startX in range(0, iWidth, 8):
-            # ETAPE 3: DIVISION INTO BLOCS
-            for c in range(0, 3):
-                block = coverImage[startY:startY+8, startX:startX+8, c:c+1].reshape(8,8)
-
-                # ETAPE 4: DCT FOR EACH BLOCS
-                blockf = np.float32(block)     # float conversion
-                dst = cv2.dct(blockf)          # dct
-                dst2 = np.around(dst)
-
-                #quantization
-                blockq = np.around(np.divide(dst, quantizationTable[c])) # ne pas recompresser pour friddish
-                # blockq = np.multiply(blockq, quantizationTable[c])
-
-                 # store the result
-
-    #             for y in range(8):
-    #                 for x in range(8):
-    #                     if (dst2[y,x] <= 8 and dst2[y,x] >= -8):
-    #                         if (dst2[y,x] in  d3_dict[y, x] ):
-    #                             d3_dict[(y, x)][dst2[y,x]] += 1
-    #                         else:
-    #                             d3_dict[(y, x)][dst2[y,x]] = 1
-    # return d3_dict
-
-                for y in range(8):
-                    for x in range(8):
-                        #dctDict[startY+y, startX+x] = dst2[y, x]
-                        #dctList.append(dst2[y, x])
-                        dctList.append(blockq[y,x])
-
-    return dctList
-
-
-
-# def countDct(dctCoeff):
-#     mapDct = {}
-#     i = 0
-#     j = 0
-#     while (i <(dctCoeff.size / dctCoeff[i].size ) - 1):
-#         while (j < (dctCoeff[i].size / 3)):
-#             if mapDct.has_key(dctCoeff[i][j]):
-#                 mapDct[dctCoeff[i][j]] += 1
-#             else:
-#                 mapDct[dctCoeff[i][j]] = 1
-#             j += 1
-#         j = 0
-#         i += 1
-#
-#     return mapDct
-
-
-
 def modifImage(path, name, type):
     jpeg = Image.open(path + name + type)
     quantization = jpeg.quantization
@@ -125,12 +68,6 @@ def modifImage(path, name, type):
     width, height = bmp.size
     jpeg_modif = bmp.crop((4, 4, width-4, height-4))
     jpeg_modif.save(path + name + "_modif.jpg", "JPEG", qtables=quantization)
-
-
-########################################################################
-#                   BREAKING THE F5 ALGORITHM                          #
-#                       Fridrich Attack                                #
-########################################################################
 
 def Beta(mapDct, mapDctModif):
     beta = np.empty((8,8))
@@ -176,17 +113,38 @@ def MsgLength(beta, mapDctModif):
     length = (math.pow(k,2) / (pow(k,2) - 1)) * k * beta * capacity  #0.51h(1) is the estimated loss due to shrinkage
     return length
 
+########################################################################
+#                            FOR BENFORD                               #
+#       Read DCT on file, del DC coeff and 0. Put on a list            #
+########################################################################
+
+def dctBenford(dctFile):
+    dctList = []
+    with open(dctFile) as f:
+        content = f.readlines()
+
+    for i in range(0, len(content)):
+        block = content[i].split()
+        del block[0]
+        while block.count('0') > 0:
+            block.remove('0')
+        dctList += block
+
+    return dctList
 
 ########################################################################
 #                            BENFORD                                   #
 ########################################################################
 
+
+def benford_law():
+    N = 1.344
+    S = -0.376
+    q = 1.685
+
+    return [(N * math.log10(1 + (1 / ( S + math.pow(i, q)))))*100.0 for i in xrange(1,10)]
+
 def find_leading_number(line):
-    """
-   Takes in a string
-   Goes through the string to find the first occurrance of a number.
-   Returns the number.
-   """
     numbers = "123456789"
     line = str(line)
     index = len(line)
@@ -194,6 +152,12 @@ def find_leading_number(line):
         if line[i] in numbers:
             return int(line[i])
     return 0
+
+def calc_firstdigit(dataset):
+   fdigit = [str(find_leading_number(value)) for value in dataset]
+
+   distr = [fdigit.count(str(i))/float(len(dataset))*100 for i in xrange(1, 10)]
+   return distr
 
 def pearson(x,y):
    nx = len(x)
@@ -208,19 +172,6 @@ def pearson(x,y):
    normx = [(a-meanx)/sdx for a in x]
    normy = [(a-meany)/sdy for a in y]
    return sum([normx[i]*normy[i] for i in range(nx)])/(n-1)
-
-def benford_law():
-    N = 1.344
-    S = -0.376
-    q = 1.685
-
-    return [(N * math.log10(1 + (1 / ( S + math.pow(i, q)))))*100.0 for i in xrange(1,10)]
-
-def calc_firstdigit(dataset):
-   fdigit = [str(find_leading_number(value)) for value in dataset]
-   distr = [fdigit.count(str(i))/float(len(dataset))*100 for i in xrange(1, 10)]
-   return distr
-
 
 ########################################################################
 #                             PLOT                                     #
@@ -268,21 +219,29 @@ def printImg(mapDct, mapDct2):
 
 if __name__ == "__main__":
 
+    dctList = dctBenford("extractDCT.txt")
+    bendordLaw = benford_law()
+    print bendordLaw
+    me = calc_firstdigit(dctList)
+    print me
+    plot_comparative(me, benford_law(), "test")
+
+
 ########################################################################
 #                       POUR TESTER UN BENFORD                         #
 ########################################################################
 
 ### Aff graph
-    path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\stego\\"
-    name = "pixelknot-cave"
-
-    imgLoaded = loadImg(path + name + ".jpg")
-    dctArray = dct(imgLoaded)
-
-    bendordLaw = benford_law()
-    me = calc_firstdigit(dctArray)
-    print me
-    plot_comparative(me, benford_law(), name + "-JPEGCoeff")
+    # path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\stego\\"
+    # name = "pixelknot-cave"
+    #
+    # imgLoaded = loadImg(path + name + ".jpg")
+    # dctArray = dct(imgLoaded)
+    #
+    # bendordLaw = benford_law()
+    # me = calc_firstdigit(dctArray)
+    # print me
+    # plot_comparative(me, benford_law(), name + "-JPEGCoeff")
 
     ## plot_occurrance_data(dctArray)
     ## plot_occurrance_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
