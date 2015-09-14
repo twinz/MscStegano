@@ -9,56 +9,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import math
+import os
 
 ########################################################################
 #                   BREAKING THE F5 ALGORITHM                          #
 #                       Fridrich Attack                                #
 ########################################################################
-
-def loadImg(imgfile):
-    global iHeight
-    global iWidth
-    global wndLoad
-    global wndName
-    global quantizationTable
-
-    img = cv2.imread(imgfile, cv2.CV_LOAD_IMAGE_COLOR)
-    quantization =  Image.open(imgfile).quantization
-    quantization[2] = quantization[1]
-    quantizationTable = []
-    quantizationTable.append([])
-    quantizationTable.append([])
-    quantizationTable.append([])
-    l = 0
-
-    # Quantization table
-    for i in range(len(quantization)):
-        quantizationTable[i].append([])
-        k = 0
-        for j in range(len(quantization[i])):
-            quantizationTable[i][k].append(quantization[i][j])
-            l += 1
-            if (l == 8):
-                l = 0
-                k += 1
-                if (k != 8):
-                    quantizationTable[i].append([])
-
-    iHeight, iWidth = img.shape[:2]
-
-    # set size to multiply of 8
-    if (iWidth % 8) != 0:
-        filler = img[:,iWidth-1:,:]
-        for i in range(8 - (iWidth % 8)):
-            img = np.append(img, filler, 1)
-
-    if (iHeight % 8) != 0:
-        filler = img[iHeight-1:,:,:]
-        for i in range(8 - (iHeight % 8)):
-            img = np.append(img, filler, 0)
-
-    iHeight, iWidth = img.shape[:2]
-    return img
 
 def modifImage(path, name, type):
     jpeg = Image.open(path + name + type)
@@ -71,27 +27,40 @@ def modifImage(path, name, type):
 
 def Beta(mapDct, mapDctModif):
     beta = np.empty((8,8))
-    for y in range(2):
-        for x in range(2):
-            if (x == 0 and y == 0):
-                pass
-            else:
-                hbarre_0 = mapDctModif[y, x][0]
-                hbarre_1 = mapDctModif[y, x][1] + mapDctModif[y, x][-1]
-                hbarre_2 = mapDctModif[y, x][2] + mapDctModif[y, x][-2]
-                H_0 = mapDct[y, x][0]
-                H_1 = mapDct[y, x][1] + mapDct[y, x][-1]
-                H_2 = mapDct[y, x][2] + mapDct[y, x][-2]
+    H_0 = np.zeros((8,8))
+    H_1 = np.zeros((8,8))
+    H_2 = np.zeros((8,8))
+    hbarre_0 = np.zeros((8,8))
+    hbarre_1 = np.zeros((8,8))
+    hbarre_2 = np.zeros((8,8))
 
-                a = ( hbarre_1 * (H_0 - hbarre_0) ) +  ( (H_1 - hbarre_1) * (hbarre_2 - hbarre_1) )
-                if ((hbarre_2 - hbarre_1) > 0):
-                    b = math.pow(hbarre_1, 2) + (math.pow(hbarre_2 - hbarre_1, 2))
-                else:
-                    b = math.pow(hbarre_1, 2)
+    for i in range(0,len(mapDct)):
+        for k in range(0,8):
+            for l in range(0,8):
+                if (mapDct[i][k][l] == '0'):
+                    H_0[k][l] += 1
+                elif (mapDct[i][k][l] == '1' or mapDct[i][k][l] == '-1'):
+                    H_1[k][l] += 1
+                elif(mapDct[i][k][l] == '2' or mapDct[i][k][l] == '-2'):
+                    H_2[k][l] += 1
 
-                beta[y, x] = a/b
+    for i in range(0,len(mapDctModif)):
+        for k in range(0,8):
+            for l in range(0,8):
+                if (mapDctModif[i][k][l] == '0'):
+                    hbarre_0[k][l] += 1
+                elif (mapDctModif[i][k][l] == '1' or mapDctModif[i][k][l] == '-1'):
+                    hbarre_1[k][l] += 1
+                elif(mapDctModif[i][k][l] == '2' or mapDctModif[i][k][l] == '-2'):
+                    hbarre_2[k][l] += 1
 
-    betaAverage = (beta[0,1] + beta[1,0] + beta[1,1]) / 3
+    for k in range(0,8):
+        for l in range(0,8):
+            a = ( hbarre_1[k][l] * (H_0[k][l] - hbarre_0[k][l]) ) +  ( (H_1[k][l] - hbarre_1[k][l]) * (hbarre_2[k][l] - hbarre_1[k][l]) )
+            b = ( hbarre_1[k][l] * hbarre_1[k][l] ) + ( hbarre_2[k][l] - hbarre_1[k][l] ) * ( hbarre_2[k][l] - hbarre_1[k][l] )
+            beta[k][l] = a/b
+
+    betaAverage = (beta[0][1] + beta[1][0] + beta[1][1]) / 3
     return betaAverage
 
 def MsgLength(beta, mapDctModif):
@@ -100,18 +69,35 @@ def MsgLength(beta, mapDctModif):
 
     for y in range(8):
         for x in range(8):
-            if (x == 0 and y == 0):
-                pass
-            else:
-                for item in mapDctModif[y,x]:
-                    if (item == 1 or item == -1):
-                        nbCoefEgal1 += mapDctModif[y,x][item]
-                    if (item != 0 or item != -0):
-                        nbAcNoNull += mapDctModif[y,x][item]
+            nbCoefEgal1 += mapDctModif[y][x].count('1')
+            nbCoefEgal1 +=  mapDctModif[y][x].count('-1')
+            for item in mapDctModif[y][x]:
+                if (item != '0' and item != '-0'):
+                    nbAcNoNull += 1
     k = (math.log(1 / beta) + 1) / math.log(2)
     capacity = np.around(nbAcNoNull - 0.51 * nbCoefEgal1)
-    length = (math.pow(k,2) / (pow(k,2) - 1)) * k * beta * capacity  #0.51h(1) is the estimated loss due to shrinkage
+    length = (math.pow(k,2) / (pow(k,2) - 1)) * k * beta * capacity
     return length
+
+########################################################################
+#                            FOR FRIDRICH                               #
+#                 Read DCT on file, Put on a 2D list                    #
+########################################################################
+
+def dctFridrich(dctFile):
+    dctList = []
+    with open(dctFile) as f:
+        content = f.readlines()
+    for i in range(0, len(content)):
+        z = 0
+        block = content[i].split()
+        dctList.append([])
+        for x in range(0,8):
+            dctList[i].append([])
+            for y in range(0,8):
+                dctList[i][x].append(block[z])
+                z += 1
+    return dctList
 
 ########################################################################
 #                            FOR BENFORD                               #
@@ -136,7 +122,6 @@ def dctBenford(dctFile):
 #                            BENFORD                                   #
 ########################################################################
 
-
 def benford_law():
     N = 1.344
     S = -0.376
@@ -153,10 +138,10 @@ def find_leading_number(line):
             return int(line[i])
     return 0
 
-def calc_firstdigit(dataset):
-   fdigit = [str(find_leading_number(value)) for value in dataset]
+def calc_firstdigit(dctList):
+   fdigit = [str(find_leading_number(value)) for value in dctList]
 
-   distr = [fdigit.count(str(i))/float(len(dataset))*100 for i in xrange(1, 10)]
+   distr = [fdigit.count(str(i))/float(len(dctList))*100 for i in xrange(1, 10)]
    return distr
 
 def pearson(x,y):
@@ -179,6 +164,9 @@ def pearson(x,y):
 
 # FOR BENBORD
 def plot_comparative(aset, bset, dataset_label):
+   aset = [0] + aset
+   bset = [0] + bset
+   plt.axis([1, 9, 0, 60])
    plt.plot(aset, linewidth=1.0)
    plt.plot(bset, linewidth=1.0)
    plt.xlabel("First Digit")
@@ -188,153 +176,34 @@ def plot_comparative(aset, bset, dataset_label):
    plt.grid(True)
    return plt.show()
 
-# FOR BREAKING THE F5 ALGORITHM
-def printImg(mapDct, mapDct2):
-    X = []
-    Y = []
-
-    X2 = []
-    Y2 = []
-
-    for key in mapDct:
-        if (key >= -8 and key <= 8):
-            X.append(key)
-            Y.append(mapDct[key])
-
-    for key in mapDct2:
-        if (key >= -8 and key <= 8):
-            X2.append(key)
-            Y2.append(mapDct2[key])
-
-    plt.title("DCT histogram")
-    plt.hist(X, 15, weights=Y, color='b', label='stego-image', alpha=0.5)
-    plt.hist(X2, 15, weights=Y2, color='r', label='cover-image', alpha=0.5)
-    plt.xlabel('DCT')
-    plt.ylabel('Number')
-    plt.legend(loc='upper right')
-
-    plt.grid(True)
-    plt.show()
-
-
 if __name__ == "__main__":
 
-    dctList = dctBenford("extractDCT.txt")
-    bendordLaw = benford_law()
-    print bendordLaw
-    me = calc_firstdigit(dctList)
-    print me
-    plot_comparative(me, benford_law(), "test")
+    ## TEST  BENFORD
+    file = open("result.txt", "w")
+    path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\MscStegano\dctFile\dctFilePure\\"
+    tab = {}
+    for picture in os.listdir(path):
+        name = os.path.splitext(picture)[0]
+        bendordLaw = benford_law()
+        dctListPure = dctBenford(path + picture)
+        pure = calc_firstdigit(dctListPure)
+        dctListStego = dctBenford("C:\Users\Alexandre\Dropbox\kent\Project_Research\MscStegano\dctFile\dctFile\\" + picture.replace("pure", "stego"))
+        stego = calc_firstdigit(dctListStego)
+        i = 0
+        diff = 0
+        file.write("Picture: " + name + "\n")
+        file.write("First Digits\tDeviations(pure)\tDeviations(stego)\tDifference\n")
+        for value in bendordLaw:
+            file.write(str(i + 1) + "\t\t\t\t" + str(round(pure[i] - bendordLaw[i], 2)) + "\t\t\t\t" + str(round(stego[i] - bendordLaw[i], 2)) + "\t\t\t\t" + str(round( (pure[i] - bendordLaw[i]) - (stego[i] - bendordLaw[i]) , 2)) + "\n")
+            diff += abs((pure[i] - bendordLaw[i]) - (stego[i] - bendordLaw[i]))
+            i += 1
+        tab[name] = round(diff,2)
+    print tab
 
-
-########################################################################
-#                       POUR TESTER UN BENFORD                         #
-########################################################################
-
-### Aff graph
-    # path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\stego\\"
-    # name = "pixelknot-cave"
-    #
-    # imgLoaded = loadImg(path + name + ".jpg")
-    # dctArray = dct(imgLoaded)
-    #
-    # bendordLaw = benford_law()
-    # me = calc_firstdigit(dctArray)
-    # print me
-    # plot_comparative(me, benford_law(), name + "-JPEGCoeff")
-
-    ## plot_occurrance_data(dctArray)
-    ## plot_occurrance_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
-    ## plot_probability_data(["-0.7", "3.2", "-0.19", "0.25", "-0.5", "-4.5", "5.6"])
-
-
-
-
-### Print value on file
-    # file = open("result.txt", "w")
-    # pathPure = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\pure\\"
-    # pathStego = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\stego\\"
-    # bendordLaw = benford_law()
-    #
-    # for picture in os.listdir(pathPure):
-    #     print picture
-    #     file.write("Processing " + picture + "\n")
-    #     imgLoaded = loadImg(pathPure + picture)
-    #     dctArray = dct(imgLoaded)
-    #     bendord = calc_firstdigit(dctArray)
-    #     file.write(str(bendord) + "\n")
-    #
-    #     print pathStego + "pixelknot-" + picture
-    #     file.write("Processing " + "pixelknot-" + picture + "\n")
-    #     imgLoaded = loadImg(pathStego + "pixelknot-" + picture)
-    #     dctArray = dct(imgLoaded)
-    #     bendord = calc_firstdigit(dctArray)
-    #     file.write(str(bendord) + "\n")
-    #
-    #
-    # file.close()
-
-
-
-
-########################################################################
-#                       POUR TESTER UN FICHIER                         #
-########################################################################
-
-    # path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\stego\\"
-    # picture = "pixelknot-boat.jpg"
-    # name = "pixelknot-boat"
-    #
-    # print path + picture
-    # imgLoaded = loadImg(path + picture)
-    # dctArray = dct(imgLoaded)
-    #
-    # modifImage(path, name, ".jpg")
-    # imgLoaded2 = loadImg(path + name + "_modif.jpg")
-    # dctArray2 = dct(imgLoaded2)
-    #
-    #
-    # beta = Beta(dctArray, dctArray2)
-    # print beta
-    # msgLength = MsgLength(beta, dctArray2)
-    # print msgLength
-
-########################################################################
-#                       POUR TESTER UN DOSSIER                         #
-########################################################################
-
-    # file = open("result.txt", "a")
-    # path = "C:\Users\Alexandre\Dropbox\kent\Project_Research\project\pictures\\stego\\"
-    # for picture in os.listdir(path):
-    #     print "Processing " + picture
-    #     imgLoaded = loadImg(path + picture)
-    #     dctArray = dct(imgLoaded)
-    #
-    #     modifImage(path, os.path.splitext(picture)[0], os.path.splitext(picture)[1])
-    #     imgLoaded2 = loadImg(path + os.path.splitext(picture)[0] + "_modif.jpg")
-    #     dctArray2 = dct(imgLoaded2)
-    #
-    #     beta = Beta(dctArray, dctArray2)
-    #     msgLength = MsgLength(beta, dctArray2)
-    #     file.write(picture + " : \n")
-    #     file.write("\t Beta : " + str(beta) + "\n")
-    #     print "\t Beta : " + str(beta)
-    #     print "\t Msg Length : " + str(msgLength)
-    #     file.write("\t Msg Length : " + str(msgLength) + "\n")
-    #
-    #     os.remove(path + os.path.splitext(picture)[0] + ".bmp")
-    #     os.remove(path + os.path.splitext(picture)[0] + "_modif.jpg")
-    # file.close()
-
-
-########################################################################
-#                       POUR AFFICHER GRAPH (ANCIEN)                   #
-########################################################################
-
-    #mapDct = countDct(dctArray)
-    #mapDct2 = countDct(dctArray2)
-    #printImg(mapDct, mapDct2)
-
-
-
-
+    # TEST  FRIDRICH
+    dctArray = dctFridrich("C:\Users\Alexandre\Dropbox\kent\Project_Research\MscStegano\dctFile\dctFilePure\\vinePureDCT.txt")
+    dctArray2 = dctFridrich("C:\Users\Alexandre\Dropbox\kent\Project_Research\MscStegano\dctFile\dctFilePureModif\\vineModifPureDCT.txt")
+    beta = Beta(dctArray, dctArray2)
+    print "Beta = " + str(beta)
+    msgLength = MsgLength(beta, dctArray2)
+    print "msgLength = " + str(msgLength)
